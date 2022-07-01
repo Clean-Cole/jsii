@@ -1,4 +1,4 @@
-import { Comparator, Range, parse } from 'semver';
+import { Comparator, parse, Range } from 'semver';
 import { inspect } from 'util';
 
 import { TargetName } from '.';
@@ -129,6 +129,7 @@ export function toReleaseVersion(
             )} is not mapped (only "dev", "pre", "alpha", "beta" and "rc" are)`,
           );
       }
+    case TargetName.DART:
     case TargetName.DOTNET:
     case TargetName.GO:
     case TargetName.JAVA:

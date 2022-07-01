@@ -156,6 +156,19 @@ RUN apt-get update                                                              
   && rm -rf $(pip cache dir)                                                                                            \
   && rm -rf /var/lib/apt/lists/*
 
+# Install Dart
+ENV DART_VERSION='2.17.5'
+ENV DART_SDK_URL_BASE='https://storage.googleapis.com/dart-archive/channels/stable/release'
+ENV DART_HOME='/usr/local/dart-sdk'
+# TODO SHA Checksum for zip download somewhere..
+# TODO: COPY superchain/gpg/dart.asc /tmp/dart.asc
+RUN curl -fSsL "${DART_SDK_URL_BASE}/${DART_VERSION}/sdk/dartsdk-${BUILDPLATFORM//[\/]/-}-release.zip"  \
+    -o /tmp/dart-sdk.zip                                                                                                \
+    && unzip /tmp/dart-sdk.zip -d /tmp/                                                                                 \
+    && mv /tmp/dart-sdk $DART_HOME                                                                                      \
+    && rm /tmp/dart-sdk.zip                                                                                             \
+    && /usr/local/dart-sdk/bin/dart --disable-analytics
+
 # Install JDK8 (Amazon Corretto 8)
 COPY superchain/gpg/corretto.asc /tmp/corretto.asc
 RUN apt-key add /tmp/corretto.asc && rm /tmp/corretto.asc                                                               \
@@ -357,8 +370,10 @@ ENV LANG="C.UTF-8"                                                              
   \
   GOROOT="/opt/golang/go"                                                                                               \
   RUSTUP_HOME="/usr/local/rustup"                                                                                       \
-  CARGO_HOME="/usr/local/cargo"
-ENV PATH="${PATH}:${CARGO_HOME}/bin:${GOROOT}/bin:${M2}"
+  CARGO_HOME="/usr/local/cargo"                                                                                         \
+  \
+  DART_HOME='/usr/local/dart-sdk'
+ENV PATH="${PATH}:${CARGO_HOME}/bin:${GOROOT}/bin:${M2}:${DART_HOME}/bin"
 
 COPY --from=staging / /
 VOLUME /var/lib/docker

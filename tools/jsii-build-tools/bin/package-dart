@@ -1,0 +1,5 @@
+#!/bin/bash
+set -euo pipefail
+
+mkdir -p dist/dart
+dart compile exe bin/dart_runtime.dart -o dist/dart/dart_runtime

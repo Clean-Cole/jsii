@@ -6,6 +6,7 @@ import {
 import { JsiiModule } from '../packaging';
 import { Toposorted } from '../toposort';
 import { flatten } from '../util';
+import { DartBuilder } from './dart';
 import { DotnetBuilder } from './dotnet';
 import { Golang } from './go';
 import { JavaBuilder } from './java';
@@ -18,6 +19,7 @@ export enum TargetName {
   JAVA = 'java',
   JAVASCRIPT = 'js',
   PYTHON = 'python',
+  DART = 'dart',
 }
 
 export type BuilderFactory = (
@@ -33,6 +35,7 @@ export const ALL_BUILDERS: { [key in TargetName]: BuilderFactory } = {
     new IndependentPackageBuilder(TargetName.JAVASCRIPT, JavaScript, ms, o),
   python: (ms, o) =>
     new IndependentPackageBuilder(TargetName.PYTHON, Python, ms, o),
+  dart: (ms, o) => new DartBuilder(flatten(ms), o),
 };
 
 export const INCOMPLETE_DISCLAIMER_NONCOMPILING =

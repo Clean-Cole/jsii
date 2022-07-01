@@ -78,6 +78,9 @@ export interface Config {
        */
       versionSuffix?: string;
     };
+    dart?: {
+      pubName: string;
+    };
   };
 
   /**

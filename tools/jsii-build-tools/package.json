@@ -24,6 +24,7 @@
     "diff-test": "bin/diff-test",
     "package-js": "bin/package-js",
     "package-java": "bin/package-java",
+    "package-dart": "bin/package-dart",
     "package-dotnet": "bin/package-dotnet",
     "package-ruby": "bin/package-ruby",
     "package-python": "bin/package-python",

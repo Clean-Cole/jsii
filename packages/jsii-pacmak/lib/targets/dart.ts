@@ -1,19 +1,13 @@
 import * as spec from '@jsii/spec';
 import * as fs from 'fs-extra';
 import * as path from 'path';
-import * as xmlbuilder from 'xmlbuilder';
 
-import { TargetBuilder, BuildOptions } from '../builder';
+import { BuildOptions, TargetBuilder } from '../builder';
 import * as logging from '../logging';
 import { JsiiModule } from '../packaging';
-import {
-  PackageInfo,
-  Target,
-  TargetOptions,
-  findLocalBuildDirs,
-} from '../target';
-import { shell, Scratch, setExtend, filterAsync } from '../util';
-import { DotNetGenerator } from './dotnet/dotnetgenerator';
+import { PackageInfo, Target, TargetOptions } from '../target';
+import { Scratch } from '../util';
+import { DartGenerator } from './dart/dart-generator';
 import { toReleaseVersion } from './version-utils';
 
 import { TargetName } from '.';
@@ -23,7 +17,7 @@ export const TARGET_FRAMEWORK = 'netcoreapp3.1';
 /**
  * Build .NET packages all together, by generating an aggregate solution file
  */
-export class DotnetBuilder implements TargetBuilder {
+export class DartBuilder implements TargetBuilder {
   private readonly targetName = 'dart';
 
   public constructor(
@@ -56,15 +50,12 @@ export class DotnetBuilder implements TargetBuilder {
       scratchDirs.push(tempSourceDir);
 
       // Build solution
-      logging.debug('Building .NET');
-      await shell(
-        'dotnet',
-        ['build', '--force', '--configuration', 'Release'],
-        {
-          cwd: tempSourceDir.directory,
-          retry: { maxAttempts: 5 },
-        },
-      );
+      logging.debug('Building Dart');
+      // TODO: Prob need to run `dart run build_runner build`
+      // await shell('dart', ['pub', 'get'], {
+      //   cwd: tempSourceDir.directory,
+      //   retry: { maxAttempts: 5 },
+      // });
 
       await this.copyOutArtifacts(tempSourceDir.object);
       if (this.options.clean) {
@@ -82,12 +73,12 @@ export class DotnetBuilder implements TargetBuilder {
 
   private async generateAggregateSourceDir(
     modules: readonly JsiiModule[],
-  ): Promise<Scratch<TemporaryDotnetPackage[]>> {
+  ): Promise<Scratch<TemporaryDartPackage[]>> {
     return Scratch.make(async (tmpDir: string) => {
       logging.debug(`Generating aggregate .NET source dir at ${tmpDir}`);
 
       const csProjs = [];
-      const ret: TemporaryDotnetPackage[] = [];
+      const ret: TemporaryDartPackage[] = [];
 
       // Code generator will make its own subdirectory
       const generatedModules = modules.map((mod) =>
@@ -99,28 +90,28 @@ export class DotnetBuilder implements TargetBuilder {
         csProjs.push(loc.pubPackageFile);
         ret.push({
           outputTargetDirectory: mod.outputDirectory,
-          artifactsDir: path.join(tmpDir, loc.pubName, 'bin', 'Release'),
+          artifactsDir: path.join(tmpDir),
         });
       }
 
       // Use 'dotnet' command line tool to build a solution file from these csprojs
-      await shell('dotnet', ['new', 'sln', '-n', 'JsiiBuild'], { cwd: tmpDir });
-      await shell('dotnet', ['sln', 'add', ...csProjs], { cwd: tmpDir });
+      // await shell('dotnet', ['new', 'sln', '-n', 'JsiiBuild'], { cwd: tmpDir });
+      // await shell('dotnet', ['sln', 'add', ...csProjs], { cwd: tmpDir });
 
-      await this.generateNuGetConfigForLocalDeps(tmpDir);
+      // await this.generateNuGetConfigForLocalDeps(tmpDir);
 
       return ret;
     });
   }
 
-  private async copyOutArtifacts(packages: TemporaryDotnetPackage[]) {
-    logging.debug('Copying out .NET artifacts');
+  private async copyOutArtifacts(packages: TemporaryDartPackage[]) {
+    logging.debug('Copying out Dart files');
 
     await Promise.all(packages.map(copyOutIndividualArtifacts.bind(this)));
 
     async function copyOutIndividualArtifacts(
-      this: DotnetBuilder,
-      pkg: TemporaryDotnetPackage,
+      this: DartBuilder,
+      pkg: TemporaryDartPackage,
     ) {
       const targetDirectory = this.outputDir(pkg.outputTargetDirectory);
 
@@ -147,16 +138,13 @@ export class DotnetBuilder implements TargetBuilder {
    * Decide whether or not to append 'dotnet' to the given output directory
    */
   private outputDir(declaredDir: string) {
-    return this.options.languageSubdirectory
-      ? path.join(declaredDir, this.targetName)
-      : declaredDir;
+    return path.join(declaredDir, this.targetName);
   }
 
   /**
    * Write a NuGet.config that will include build directories for local packages not in the current build
-   *
    */
-  private async generateNuGetConfigForLocalDeps(where: string): Promise<void> {
+  /*private async generateNuGetConfigForLocalDeps(where: string): Promise<void> {
     // Traverse the dependency graph of this module and find all modules that have
     // an <outdir>/dotnet directory. We will add those as local NuGet repositories.
     // This enables building against local modules.
@@ -235,10 +223,10 @@ export class DotnetBuilder implements TargetBuilder {
     const filePath = path.join(where, 'NuGet.config');
     logging.debug(`Generated ${filePath}`);
     await fs.writeFile(filePath, xml);
-  }
+  }*/
 
-  private makeTarget(module: JsiiModule): Dotnet {
-    return new Dotnet(
+  private makeTarget(module: JsiiModule): Dart {
+    return new Dart(
       {
         targetName: this.targetName,
         packageDir: module.moduleDirectory,
@@ -253,7 +241,7 @@ export class DotnetBuilder implements TargetBuilder {
   }
 }
 
-interface TemporaryDotnetPackage {
+interface TemporaryDartPackage {
   /**
    * Where the artifacts will be stored after build (relative to build dir)
    */
@@ -266,47 +254,39 @@ interface TemporaryDotnetPackage {
 }
 
 function projectLocation(module: JsiiModule) {
-  const packageId: string = module.assembly.targets!.dotnet!.packageId;
+  const packageId: string = module.assembly.targets!.dart!.pubName;
   return {
     pubName: packageId,
-    pubPackageFile: path.join(packageId, `${packageId}.csproj`),
+    pubPackageFile: path.join(packageId, `pubspec.yml`),
   };
 }
 
-export default class Dotnet extends Target {
+export default class Dart extends Target {
   public static toPackageInfos(assm: spec.Assembly): {
     [language: string]: PackageInfo;
   } {
-    const packageId = assm.targets!.dotnet!.packageId;
-    const version = toReleaseVersion(assm.version, TargetName.DOTNET);
+    const pubName = assm.targets!.dart!.pubName;
+    const version = toReleaseVersion(assm.version, TargetName.DART);
     const packageInfo: PackageInfo = {
       repository: 'Nuget',
-      url: `https://www.nuget.org/packages/${packageId}/${version}`,
+      url: `https://www.nuget.org/packages/${pubName}/${version}`,
       usage: {
-        csproj: {
-          language: 'xml',
-          code: `<PackageReference Include="${packageId}" Version="${version}" />`,
-        },
-        dotnet: {
+        dart: {
           language: 'console',
-          code: `dotnet add package ${packageId} --version ${version}`,
-        },
-        'packages.config': {
-          language: 'xml',
-          code: `<package id="${packageId}" version="${version}" />`,
+          code: `dart pub add ${pubName} --version ${version}`,
         },
       },
     };
-    return { 'C#': packageInfo };
+    return { Dart: packageInfo };
   }
 
   public static toNativeReference(_type: spec.Type, options: any) {
     return {
-      'c#': `using ${options.namespace};`,
+      dart: `using ${options.namespace};`,
     };
   }
 
-  protected readonly generator: DotNetGenerator;
+  protected readonly generator: DartGenerator;
 
   public constructor(
     options: TargetOptions,
@@ -314,7 +294,7 @@ export default class Dotnet extends Target {
   ) {
     super(options);
 
-    this.generator = new DotNetGenerator(
+    this.generator = new DartGenerator(
       assembliesCurrentlyBeingCompiled,
       options.rosetta,
     );

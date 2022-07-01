@@ -49,6 +49,7 @@
     "semver": "^7.3.7",
     "spdx-license-list": "^6.6.0",
     "xmlbuilder": "^15.1.1",
+    "yaml": "^2.1.1",
     "yargs": "^16.2.0"
   },
   "devDependencies": {

@@ -13,6 +13,7 @@
     { "path": "packages/jsii" },
     { "path": "packages/oo-ascii-tree" },
     { "path": "packages/@jsii/check-node" },
+    { "path": "packages/@jsii/dart-runtime" },
     { "path": "packages/@jsii/dotnet-runtime-test" },
     { "path": "packages/@jsii/dotnet-runtime" },
     { "path": "packages/@jsii/integ-test" },

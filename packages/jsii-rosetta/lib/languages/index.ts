@@ -1,5 +1,6 @@
 import { AstHandler } from '../renderer';
 import { CSharpVisitor } from './csharp';
+import { DartVisitor } from './dart';
 import { GoVisitor } from './go';
 import { JavaVisitor } from './java';
 import { PythonVisitor } from './python';
@@ -27,6 +28,10 @@ export const TARGET_LANGUAGES: { [key in TargetLanguage]: VisitorFactory } = {
   },
   go: {
     version: GoVisitor.VERSION,
+    createVisitor: () => new GoVisitor(),
+  },
+  dart: {
+    version: DartVisitor.VERSION,
     createVisitor: () => new GoVisitor(),
   },
 };
