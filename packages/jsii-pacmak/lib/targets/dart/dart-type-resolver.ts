@@ -1,5 +1,5 @@
 import * as spec from '@jsii/spec';
-import { toPascalCase } from 'codemaker';
+import { toSnakeCase } from 'codemaker';
 
 import { DartDependency } from './file-generator';
 import { DartNameUtils } from './name-utils';
@@ -15,8 +15,8 @@ export class DartTypeResolver {
     DartDependency
   >();
 
-  private readonly findModule: FindModuleCallback;
-  private readonly findType: FindTypeCallback;
+  public readonly findModule: FindModuleCallback;
+  public readonly findType: FindTypeCallback;
   private readonly assembly: spec.Assembly;
   private readonly nameutils: DartNameUtils = new DartNameUtils();
 
@@ -65,14 +65,14 @@ export class DartTypeResolver {
       const associatedNamespace = this.assembly.types?.[namespaceFqn];
       if (associatedNamespace) {
         // Checking if there is a C# type associated with this namespace, in case we need to slugify it
-        const actualNamespace = this.toDartType(this.findType(namespaceFqn));
-        return `${actualNamespace}.${typeName}`;
+        // const actualNamespace = this.toDartType(this.findType(namespaceFqn));
+        return `${typeName}`;
       }
-      const ns = this.resolveNamespace(depMod, mod, type.namespace);
-      return `${ns}.${typeName}`;
+      // const ns = this.resolveNamespace(depMod, mod, type.namespace);
+      return `${typeName}`;
     }
     // When undefined, the type is located at the root of the assembly
-    return `${dotnetNamespace}.${typeName}`;
+    return `${typeName}`;
   }
 
   /**
@@ -127,7 +127,7 @@ export class DartTypeResolver {
    */
   public toDartType(typeref: spec.TypeReference): string {
     if (spec.isPrimitiveTypeReference(typeref)) {
-      return this.toDotNetPrimitive(typeref.primitive);
+      return this.toDartPrimitive(typeref.primitive);
     } else if (spec.isCollectionTypeReference(typeref)) {
       return this.toDartCollection(typeref);
     } else if (spec.isNamedTypeReference(typeref)) {
@@ -136,6 +136,10 @@ export class DartTypeResolver {
       return 'dynamic';
     }
     throw new Error(`Invalid type reference: ${JSON.stringify(typeref)}`);
+  }
+
+  public resolveProjectPathFromNamespace(jsiiNs: string) {
+    return jsiiNs.replace('.', '/');
   }
 
   public resolveNamespace(
@@ -149,14 +153,15 @@ export class DartTypeResolver {
         `Assembly ${assmName} does not have targets.dotnet.namespace configured!`,
       );
     }
+    // TODO: Simplify this to match Dart.  This is creating `.` namespacing for the dotnet project I copied
     const segments = ns.split('.');
     for (let i = 0; i < segments.length; i++) {
-      const submoduleName = `${assmName}.${segments.slice(0, i + 1).join('.')}`;
+      const submoduleName = `${assmName}.${segments.slice(0, i + 1).join('-')}`;
       const submodule = assm.submodules?.[submoduleName];
-      if (submodule && submodule.targets?.dotnet?.namespace) {
-        resolved = submodule.targets.dotnet.namespace;
+      if (submodule && submodule.targets?.dart?.pubName) {
+        resolved = submodule.targets.dart.pubName;
       } else {
-        resolved = `${resolved}.${toPascalCase(segments[i])}`;
+        resolved = `${resolved}.${toSnakeCase(segments[i])}`;
       }
     }
     return resolved;
@@ -165,7 +170,7 @@ export class DartTypeResolver {
   /**
    * Translates a primitive in jsii to a native Dart primitive
    */
-  private toDotNetPrimitive(primitive: spec.PrimitiveType): string {
+  private toDartPrimitive(primitive: spec.PrimitiveType): string {
     switch (primitive) {
       case spec.PrimitiveType.Boolean:
         return 'bool';

@@ -52,14 +52,13 @@ export class DartFileGenerator {
       name: pubName,
       description: this.getDescription(),
       version: this.getDecoratedVersion(this.assm),
-      homepage: 'https://example-pet-store.com/newtify',
-      documentation: 'https://example-pet-store.com/newtify/docs',
+      homepage: '',
+      documentation: '',
       environment: {
-        sdk: '>=2.10.0 <3.0.0',
+        sdk: '>=2.17.0 <3.0.0',
       },
       dependencies: {
-        efts: '^2.0.4',
-        transmogrify: '^0.4.0',
+        path: 'any',
       },
       dev_dependencies: {
         test: '>=1.15.0 <2.0.0',

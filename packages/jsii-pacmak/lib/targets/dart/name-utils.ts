@@ -8,7 +8,7 @@ export class DartNameUtils {
     if (this.isInvalidName(original)) {
       throw new Error(`Invalid property name: ${original}`);
     }
-    return this.capitalizeWord(original);
+    return toCamelCase(original);
   }
 
   public convertTypeName(original: string) {
@@ -22,7 +22,7 @@ export class DartNameUtils {
     if (this.isInvalidName(original)) {
       throw new Error(`Invalid method name: ${original}`);
     }
-    return this.capitalizeWord(original);
+    return toCamelCase(original);
   }
 
   public convertEnumMemberName(original: string) {
@@ -36,10 +36,10 @@ export class DartNameUtils {
     if (this.isInvalidName(original.name)) {
       throw new Error(`Invalid interface name: ${original.name}`);
     }
-    if (original.datatype) {
-      // Datatype interfaces need to be prefixed by I so that they don't clash with the prop object implementation
-      return `I${this.capitalizeWord(original.name)}`;
-    }
+    // if (original.datatype) {
+    //   // Datatype interfaces need to be prefixed by I so that they don't clash with the prop object implementation
+    //   return `I${this.capitalizeWord(original.name)}`;
+    // }
     // Non datatype interfaces are guaranteed by JSII to be prefixed by I already
     return this.capitalizeWord(original.name);
   }

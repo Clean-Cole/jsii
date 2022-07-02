@@ -280,11 +280,11 @@ export default class Dart extends Target {
     return { Dart: packageInfo };
   }
 
-  public static toNativeReference(_type: spec.Type, options: any) {
-    return {
-      dart: `using ${options.namespace};`,
-    };
-  }
+  // public static toNativeReference(_type: spec.Type, options: any) {
+  //   return {
+  //     dart: `using ${options.namespace};`,
+  //   };
+  // }
 
   protected readonly generator: DartGenerator;
 

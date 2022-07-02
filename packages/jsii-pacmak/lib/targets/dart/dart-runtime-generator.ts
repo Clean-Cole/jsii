@@ -119,12 +119,12 @@ export class DartRuntimeGenerator {
   public emitAttributesForInterfaceProxy(
     ifc: spec.ClassType | spec.InterfaceType,
   ): void {
-    const name = spec.isInterfaceType(ifc)
-      ? this.nameutils.convertInterfaceName(ifc)
-      : this.typeresolver.toNativeFqn(ifc.fqn);
-    this.code.line(
-      `[JsiiTypeProxy(nativeType: typeof(${name}), fullyQualifiedName: "${ifc.fqn}")]`,
-    );
+    // const name = spec.isInterfaceType(ifc)
+    //   ? this.nameutils.convertInterfaceName(ifc)
+    //   : this.typeresolver.toNativeFqn(ifc.fqn);
+    // this.code.line(
+    //   `[JsiiTypeProxy(nativeType: typeof(${name}), fullyQualifiedName: "${ifc.fqn}")]`,
+    // );
     this.emitDeprecatedAttributeIfNecessary(ifc);
   }
 
@@ -134,8 +134,9 @@ export class DartRuntimeGenerator {
    * Ex: [JsiiEnum(nativeType: typeof(Test), fullyQualifiedName: "jsii-calc.Test")]
    */
   public emitAttributesForEnum(enm: spec.EnumType, enumName: string): void {
-    const jsiiAttribute = `[JsiiEnum(nativeType: typeof(${enumName}), fullyQualifiedName: "${enm.fqn}")]`;
-    this.code.line(jsiiAttribute);
+    if (enumName == null) console.log(enumName);
+    // const jsiiAttribute = `[JsiiEnum(nativeType: typeof(${enumName}), fullyQualifiedName: "${enm.fqn}")]`;
+    // this.code.line(jsiiAttribute);
     this.emitDeprecatedAttributeIfNecessary(enm);
   }
 
@@ -148,8 +149,9 @@ export class DartRuntimeGenerator {
     enumMemberName: string,
     enmmember: spec.EnumMember,
   ): void {
-    const jsiiAttribute = `[JsiiEnumMember(name: "${enumMemberName}")]`;
-    this.code.line(jsiiAttribute);
+    if (enumMemberName == null) console.log(enumMemberName);
+    // const jsiiAttribute = `[JsiiEnumMember(name: "${enumMemberName}")]`;
+    // this.code.line(jsiiAttribute);
     this.emitDeprecatedAttributeIfNecessary(enmmember);
   }
 
