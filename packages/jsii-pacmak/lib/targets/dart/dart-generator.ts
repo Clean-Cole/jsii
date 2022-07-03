@@ -2,6 +2,7 @@ import * as spec from '@jsii/spec';
 import {
   Assembly,
   ClassType,
+  Initializer,
   InterfaceType,
   Method,
   Property,
@@ -16,16 +17,18 @@ import * as path from 'path';
 import * as YAML from 'yaml';
 
 import { Generator } from '../../generator';
-import { debug } from '../../logging';
 import { DartDocGenerator } from './dart-doc-generator';
 import { DartTypeResolver } from './dart-type-resolver';
 import { DartNameUtils } from './name-utils';
 
-export class DartGenerator extends Generator {
-  private typeresolver!: DartTypeResolver;
+const DART_DEBUG_MODE = true;
 
-  private readonly nameutils: DartNameUtils = new DartNameUtils();
+export class DartGenerator extends Generator {
+  private resolver!: DartTypeResolver;
+
+  private readonly utils: DartNameUtils = new DartNameUtils();
   private dartDocGenerator!: DartDocGenerator;
+  private readonly _savedNestedInterfaces: InterfaceType[] = [];
 
   public constructor(
     private readonly assembliesCurrentlyBeingCompiled: string[],
@@ -34,23 +37,29 @@ export class DartGenerator extends Generator {
     super();
   }
 
+  private debug(msg: string): void {
+    if (!DART_DEBUG_MODE) return;
+
+    return this.code.line(`/// ${msg}`);
+  }
+
   public generate(fingerprint: boolean) {
     /*this.dartRuntimeGenerator = new DartRuntimeGenerator(
       this.code,
-      this.typeresolver,
+      this.resolver,
     );*/
     this.dartDocGenerator = new DartDocGenerator(
       this.code,
       this.rosetta,
       this.assembly,
     );
-    this.typeresolver = new DartTypeResolver(
+    this.resolver = new DartTypeResolver(
       this.assembly,
       (fqn: string) => this.findModule(fqn),
       (fqn: string) => this.findType(fqn),
       this.assembliesCurrentlyBeingCompiled,
     );
-    this.typeresolver.resolveNamespacesDependencies();
+    this.resolver.resolveNamespacesDependencies();
     super.generate(fingerprint);
   }
 
@@ -62,26 +71,26 @@ export class DartGenerator extends Generator {
   }
 
   public async save(
-    outdir: string,
+    outDir: string,
     // tarball: string,
     // { license, notice }: Legalese,
   ): Promise<string[]> {
-    // filegen.generateProjectFile(this.typeresolver.namespaceDependencies);
-    const assm = this.assembly;
-    const pubName: string = assm.targets!.dart!.pubName;
+    // filegen.generateProjectFile(this.resolver.namespaceDependencies);
+    const assembly = this.assembly;
+    const pubName: string = assembly.targets!.dart!.pubName;
     // if (!pubName) {
     //   throw new Error(
-    //     `The module ${assm.name} does not have a Dart pubName setting`,
+    //     `The module ${assembly.name} does not have a Dart pubName setting`,
     //   );
     // }
-    await fs.mkdirp(path.join(outdir, pubName));
+    await fs.mkdirp(path.join(outDir, pubName));
 
     // Saving the generated code.
-    return this.code.save(outdir);
+    return this.code.save(outDir);
   }
 
   protected onBeginAssembly(assembly: Assembly, _fingerprint: boolean) {
-    this.typeresolver.resolveNamespacesDependencies();
+    this.resolver.resolveNamespacesDependencies();
     // Create the pubspec.yaml
     const globalPubSpecPath = 'pubspec.yaml';
     const pubName: string = assembly.targets?.dart?.pubName;
@@ -131,7 +140,7 @@ export class DartGenerator extends Generator {
   }
   protected onEndNamespace(_jsiiNs: string) {
     try {
-      if (this.typeresolver.findModule(_jsiiNs)) {
+      if (this.resolver.findModule(_jsiiNs)) {
         // We are in a module which means we don't have anything to do yet.
         return;
       }
@@ -197,74 +206,92 @@ export class DartGenerator extends Generator {
   }
 
   protected onBeginInterface(ifc: InterfaceType): void {
+    const implementations = this.resolver.resolveImplementedInterfaces(ifc);
+    const interfaceName = this.utils.convertInterfaceName(ifc);
+    this._openFile(ifc.namespace ?? '', interfaceName, this.isNested(ifc));
     if (this.isNested(ifc)) {
-      // debug(`'this class is nested' ${ifc.fqn}`);
-    } else {
-      const implementations =
-        this.typeresolver.resolveImplementedInterfaces(ifc);
-      const interfaceName = this.nameutils.convertInterfaceName(ifc);
-      this._openFile(ifc.namespace ?? '', interfaceName, this.isNested(ifc));
-      this.code.line();
-      this.dartDocGenerator.emitDocs(ifc, { api: 'type', fqn: ifc.fqn });
-      // this.dartRuntimeGenerator.emitAttributesForInterface(ifc);
-      let implementsStr = '';
-      if (implementations.length > 0) {
-        implementsStr = `implements ${implementations.join(', ')}`;
-      }
-      this.code.openBlock(`abstract class ${interfaceName} ${implementsStr}`);
+      this._savedNestedInterfaces.push(ifc);
+      return;
     }
+    this.debug(`onBeginInterface ${ifc.name}`);
+
+    this.code.line();
+    this.dartDocGenerator.emitDocs(ifc, { api: 'type', fqn: ifc.fqn });
+    // this.dartRuntimeGenerator.emitAttributesForInterface(ifc);
+    let implementsStr = '';
+    if (implementations.length > 0) {
+      implementsStr = `implements ${implementations.join(', ')}`;
+    }
+    this.code.openBlock(`abstract class ${interfaceName} ${implementsStr}`);
   }
   protected onEndInterface(ifc: InterfaceType): void {
+    this.debug(`onEndInterface ${ifc.name}`);
+    if (this.isNested(ifc)) {
+      return;
+    }
+    if (this.isNested(ifc)) return;
     this.code.closeBlock();
-    const interfaceName = this.nameutils.convertInterfaceName(ifc);
+    const interfaceName = this.utils.convertInterfaceName(ifc);
     this._closeFile(ifc.namespace ?? '', interfaceName, this.isNested(ifc));
   }
 
   protected onBeginClass(cls: spec.ClassType, abstract: boolean) {
     let baseTypeNames: string[] = [];
-    const className = this.nameutils.convertClassName(cls);
+    const className = this.utils.convertClassName(cls);
     const moduleName = cls.namespace ?? toSnakeCase(cls.assembly);
     this._openFile(moduleName, className, this.isNested(cls));
-
-    if (this.isNested(cls)) {
-      debug(`'this class is nested' ${cls.fqn}`);
-    } else {
-      const absPrefix = abstract ? 'abstract ' : '';
-      if (cls.interfaces && cls.interfaces.length > 0) {
-        const implementations =
-          this.typeresolver.resolveImplementedInterfaces(cls);
-        baseTypeNames = baseTypeNames.concat(implementations);
-      }
-      this.dartDocGenerator.emitDocs(cls, {
-        api: 'type',
-        fqn: cls.fqn,
-      });
-      const implementsExpr = ` implements ${baseTypeNames.join(', ')}`;
-      this.code.openBlock(`${absPrefix}class ${className}${implementsExpr}`);
+    if (this.isNested(cls)) return;
+    this.debug(`onBeginClass ${cls.name}`);
+    const absPrefix = abstract ? 'abstract ' : '';
+    if (cls.interfaces && cls.interfaces.length > 0) {
+      const implementations = this.resolver.resolveImplementedInterfaces(cls);
+      baseTypeNames = baseTypeNames.concat(implementations);
     }
+    this.dartDocGenerator.emitDocs(cls, {
+      api: 'type',
+      fqn: cls.fqn,
+    });
+    const implementsExpr = ` implements ${baseTypeNames.join(', ')}`;
+    this.code.openBlock(`${absPrefix}class ${className}${implementsExpr}`);
   }
   protected onEndClass(cls: spec.ClassType) {
+    this.debug(`onEndClass ${cls.name}`);
     this.code.closeBlock();
-    const className = this.nameutils.convertClassName(cls);
+
+    // Now we print off a bunch of classes to use as interfaces
+    for (const intType of this._savedNestedInterfaces) {
+      this.code.openBlock(`class ${intType.name}`);
+      this.code.closeBlock();
+    }
+
+    const className = this.utils.convertClassName(cls);
     const moduleName = cls.namespace ?? toSnakeCase(cls.assembly);
     this._closeFile(moduleName, className, this.isNested(cls));
   }
 
-  protected onInterfaceMethod(_ifc: InterfaceType, method: Method): void {
+  protected onInterfaceMethod(ifc: InterfaceType, method: Method): void {
+    this.debug(`onInterfaceMethod ${ifc.name}.${method.name}`);
     const returnType = method.returns
-      ? this.typeresolver.toDartType(method.returns.type)
+      ? this.resolver.toDartType(method.returns.type)
       : 'void';
     const nullable = method.returns?.optional ? '?' : '';
-    const methodProps = this._renderMethodParameters(method);
+    const methodProps = DartGenerator.#_renderMethodParameters(method);
     this.code.line(
-      `${returnType}${nullable} ${this.nameutils.convertMethodName(
+      `${returnType}${nullable} ${this.utils.convertMethodName(
         method.name,
       )}(${methodProps});`,
     );
   }
 
-  private _renderMethodParameters(_method: Method): string {
+  // eslint-disable-next-line @typescript-eslint/member-ordering
+  static #_renderMethodParameters(_method: Method): string {
     return '';
+  }
+
+  private _getProperty(prop: Property): string {
+    const returnDartType = this.resolver.toDartType(prop.type);
+    const optional = prop.optional ? '?' : '';
+    return `${returnDartType}${optional} ${prop.name}`;
   }
 
   private isNested(type: spec.Type): boolean {
@@ -308,11 +335,11 @@ export class DartGenerator extends Generator {
     _overload: Method,
     _originalMethod: Method,
   ): void {
-    // console.log('onInterfaceMethodOverload', ifc, overload, originalMethod);
+    this.debug(`onInterfaceMethodOverload ${_overload.name}`);
   }
 
   protected onInterfaceProperty(ifc: InterfaceType, prop: Property): void {
-    // console.log('onInterfaceProperty', ifc, prop);
+    this.debug(`onInterfaceProperty ${prop.name}`);
     if (!prop.abstract) {
       throw new Error(`Interface properties must be abstract: ${prop.name}`);
     }
@@ -336,16 +363,20 @@ export class DartGenerator extends Generator {
   }
 
   protected onMethod(_cls: ClassType, method: Method): void {
+    this.debug(`onMethod ${method.name}`);
     const returnType = method.returns
-      ? this.typeresolver.toDartType(method.returns.type)
+      ? this.resolver.toDartType(method.returns.type)
       : 'void';
-    const staticKeyWord = method.static ? 'static ' : '';
-    const methodName = this.nameutils.convertMethodName(method.name);
+    const staticKeyWord = method.static ? 'const ' : '';
+    const methodName = this.utils.convertMethodName(method.name);
     const isOptional = method.returns && method.returns.optional ? '?' : '';
-    const signature = `${returnType}${isOptional} ${methodName}(${this._renderMethodParameters(
+    const signature = `${returnType}${isOptional} ${methodName}(${DartGenerator.#_renderMethodParameters(
       method,
     )})`;
     this.code.openBlock(`${staticKeyWord}${signature}`);
+    if (returnType !== 'void') {
+      this.code.line(`return ${returnType}();`);
+    }
     this.code.closeBlock();
   }
 
@@ -354,16 +385,24 @@ export class DartGenerator extends Generator {
     _overload: Method,
     _originalMethod: Method,
   ): void {
+    this.debug('onMethodOverload');
     this._doMethod(cls, _originalMethod, _overload);
   }
 
-  protected onProperty(cls: ClassType, _prop: Property): void {
-    const returnType = this.typeresolver.toDartType(cls);
-    this.code.openBlock(`${returnType} ${cls.name}`);
-    this.code.closeBlock();
+  protected onProperty(_cls: ClassType, prop: Property): void {
+    this.debug(`onProperty ${prop.name}`);
+    const props = this._getProperty(prop);
+    this.code.line(`static ${props};`);
+  }
+
+  protected onInitializer(cls: ClassType, _initializer: Initializer) {
+    this.debug(`onInitializer ${cls.name}`);
+    const className = this.utils.convertClassName(cls);
+    this.code.line(`${className}();`);
   }
 
   protected onStaticMethod(cls: ClassType, method: Method): void {
+    this.debug(`onStaticMethod ${cls.name}.${method.name}`);
     this._doMethod(cls, method);
   }
 
@@ -372,19 +411,28 @@ export class DartGenerator extends Generator {
     _overload: Method,
     _originalMethod: Method,
   ): void {
-    // console.log('onStaticMethodOverload', cls, overload, originalMethod);
+    this.debug(`onStaticMethodOverload ${_overload.name}`);
+    // this._doMethod(cls, method, undefined, true);
   }
 
-  protected onStaticProperty(_cls: ClassType, _prop: Property): void {
-    // console.log('onStaticProperty', cls, prop);
+  protected onStaticProperty(_cls: ClassType, prop: Property): void {
+    this.debug(`onStaticProperty ${prop.name}`);
+    const props = this._getProperty(prop);
+    const defaultValue = `''`;
+    this.code.line(`static ${props} = ${defaultValue};`);
   }
 
   protected onUnionProperty(
     _cls: ClassType,
-    _prop: Property,
+    prop: Property,
     _union: UnionTypeReference,
   ): void {
-    // console.log('onUnionProperty', _cls, _prop, _union);
+    this.debug(`onUnionProperty ${prop.name}`);
+    // const unTypes = union?.union?.types ?? [];
+    // const props = unTypes.map((value) => {
+    //   return this.resolver.toDartType(value);
+    // });
+    // this.code.line(`${prop.name} ${props.join(' | ')}`);
   }
 
   private _doMethod(
@@ -392,6 +440,6 @@ export class DartGenerator extends Generator {
     _method: Method,
     _overloadMethod: Method | undefined = undefined,
   ): void {
-    //
+    this.debug('_doMethod');
   }
 }

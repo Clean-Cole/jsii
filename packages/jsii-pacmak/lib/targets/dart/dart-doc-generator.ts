@@ -12,6 +12,8 @@ import * as xmlbuilder from 'xmlbuilder';
 import { renderSummary } from '../_utils';
 import { DartNameUtils } from './name-utils';
 
+const DART_HIDE_DOCS = true;
+
 /**
  * Generates the Jsii attributes and calls for the .NET runtime
  *
@@ -40,6 +42,7 @@ export class DartDocGenerator {
    * Remarks (includes examples, links, deprecated)
    */
   public emitDocs(obj: spec.Documentable, apiLocation: ApiLocation): void {
+    if (DART_HIDE_DOCS) return;
     const docs = obj.docs;
 
     // The docs may be undefined at the method level but not the parameters level
@@ -89,6 +92,7 @@ export class DartDocGenerator {
     markdown: string | undefined,
     apiLocation: ApiLocation,
   ) {
+    if (DART_HIDE_DOCS) return;
     if (!markdown) {
       return;
     }
@@ -109,6 +113,7 @@ export class DartDocGenerator {
    * Returns the lines that should go into the <remarks> section
    */
   private renderRemarks(docs: spec.Docs, apiLocation: ApiLocation): string[] {
+    if (DART_HIDE_DOCS) return [''];
     const ret: string[] = [];
 
     if (docs.remarks) {
@@ -152,6 +157,7 @@ export class DartDocGenerator {
     return ret;
 
     function emitDocAttribute(name: string, contents: string) {
+      if (DART_HIDE_DOCS) return;
       const ls = contents.split('\n');
       ret.push(`<strong>${ucFirst(name)}</strong>: ${ls[0]}`);
       ret.push(...ls.slice(1));
@@ -160,6 +166,7 @@ export class DartDocGenerator {
   }
 
   private convertExample(example: string, apiLocation: ApiLocation): string {
+    if (DART_HIDE_DOCS) return '';
     const translated = this.rosetta.translateExample(
       apiLocation,
       example,
@@ -170,6 +177,7 @@ export class DartDocGenerator {
   }
 
   private convertSamplesInMarkdown(markdown: string, api: ApiLocation): string {
+    if (DART_HIDE_DOCS) return '';
     return this.rosetta.translateSnippetsInMarkdown(
       api,
       markdown,
