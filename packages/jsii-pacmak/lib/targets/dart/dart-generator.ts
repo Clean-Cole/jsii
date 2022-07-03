@@ -84,9 +84,10 @@ export class DartGenerator extends Generator {
     this.typeresolver.resolveNamespacesDependencies();
     // Create the pubspec.yaml
     const globalPubSpecPath = 'pubspec.yaml';
+    const pubName: string = assembly.targets?.dart?.pubName;
     this._writeStringToFile(
       YAML.stringify({
-        name: toSnakeCase(this.assembly.name),
+        name: pubName,
         version: `${this.assembly.version}`,
         publish_to: 'none',
         homepage: `${this.assembly.homepage}`,
@@ -197,7 +198,7 @@ export class DartGenerator extends Generator {
 
   protected onBeginInterface(ifc: InterfaceType): void {
     if (this.isNested(ifc)) {
-      debug(`'this class is nested' ${ifc.fqn}`);
+      // debug(`'this class is nested' ${ifc.fqn}`);
     } else {
       const implementations =
         this.typeresolver.resolveImplementedInterfaces(ifc);
@@ -349,19 +350,21 @@ export class DartGenerator extends Generator {
   }
 
   protected onMethodOverload(
-    _cls: ClassType,
+    cls: ClassType,
     _overload: Method,
     _originalMethod: Method,
   ): void {
-    // console.log('onMethodOverload', _cls, _overload, _originalMethod);
+    this._doMethod(cls, _originalMethod, _overload);
   }
 
-  protected onProperty(_cls: ClassType, _prop: Property): void {
-    // console.log('onProperty', cls, prop);
+  protected onProperty(cls: ClassType, _prop: Property): void {
+    const returnType = this.typeresolver.toDartType(cls);
+    this.code.openBlock(`${returnType} ${cls.name}`);
+    this.code.closeBlock();
   }
 
-  protected onStaticMethod(_cls: ClassType, _method: Method): void {
-    // console.log('onStaticMethod', cls, method);
+  protected onStaticMethod(cls: ClassType, method: Method): void {
+    this._doMethod(cls, method);
   }
 
   protected onStaticMethodOverload(
@@ -382,5 +385,13 @@ export class DartGenerator extends Generator {
     _union: UnionTypeReference,
   ): void {
     // console.log('onUnionProperty', _cls, _prop, _union);
+  }
+
+  private _doMethod(
+    _parentType: ClassType | InterfaceType,
+    _method: Method,
+    _overloadMethod: Method | undefined = undefined,
+  ): void {
+    //
   }
 }
